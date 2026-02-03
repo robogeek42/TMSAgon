@@ -5,11 +5,56 @@
 #include "tms.h"
 
 static uint8_t VDPMode = 0;
+static uint8_t dataDir = 0;
 
 extern uint8_t CHAR_TABLE[128][8];
 extern uint8_t VDPModeTable[32];
 
-static uint8_t ScreenMode0[520];
+static uint8_t ScreenMode0[960];
+
+#define MODE_VRAM    0
+#define MODE_REGADDR 1
+
+#define RWB_WRITE    0
+#define RWB_READ     1
+#define WRITE    0
+#define READ     1
+
+
+int mini_delay(int t)
+{
+    volatile int i;
+    for (i=0;i<t;i++) {}
+    return i;
+}
+
+void set_signals(uint8_t MODE, uint8_t RWB)
+{
+    uint8_t signals = (RWB==1?1<<TMS_SIG_RWB_BIT:0) | 
+                      (RWB==1?1<<TMS_SIG_A1_BIT:0) | 
+                      (MODE==1?1<<TMS_SIG_MODE_BIT:0);
+
+    io_out(TMS_SIG, signals);
+    //IO(TMS_SIG) = signals;
+}
+void reset_signals()
+{
+    io_out(TMS_SIG, 0x70);
+    //IO(TMS_SIG) = 0x70;
+} 
+
+#define DDIR_WRITE 0
+#define DDIR_READ  1
+
+void setDataDir(uint8_t ddir)
+{
+    if (dataDir != ddir)
+    {
+        io_out(TMS_DATA_DIR, ddir==DDIR_READ?TMS_DATA_READ:TMS_DATA_WRITE);
+        //IO(TMS_DATA_DIR) = ddir==DDIR_READ?TMS_DATA_READ:TMS_DATA_WRITE;
+        dataDir = ddir;
+    }
+}
 
 bool tms_init()
 {
@@ -18,9 +63,12 @@ bool tms_init()
     io_out(TMS_SIG_DIR, TMS_SIG_INIT);
     //IO(TMS_SIG_DIR) = TMS_SIG_INIT;
 
+    // Read Status Reg to clear interrupt bit
+    uint8_t status_reg = tms_read_status();
+    printf("Status Reg = 0x%02X\n", status_reg);
+
     // DATA : can be Read or Write, depending. Start with READ
-    io_out(TMS_DATA_DIR, TMS_DATA_READ);
-    //IO(TMS_DATA_DIR) = TMS_DATA_READ;
+    setDataDir(DDIR_READ);
 
     // set registers for mode 0
     VDPMode = 0; // default
@@ -36,65 +84,41 @@ bool tms_init()
 // Write 8 bits to TMS VDP data port
 void tms_write_data(uint8_t data)
 {
-    // Set Control signals
-    uint8_t signals = 0;
-    
-    // RWB & A1 - low
-    // MODE - low : Selects Data word
-    // EN - low
+    setDataDir(DDIR_WRITE);
 
-    signals = TMS_SIG_RWB_RESET | TMS_SIG_A1_RESET |
-              TMS_SIG_MODE_RESET |
-              TMS_SIG_EN_RESET; 
-    
-    io_out(TMS_SIG, signals);
-
-    // Set Data to WRITE
-    io_out(TMS_DATA_DIR, TMS_DATA_WRITE);
-    //IO(TMS_DATA_DIR) = TMS_DATA_WRITE;
     io_out(TMS_DATA, data);
     //IO(TMS_DATA) = data;
 
-    // Set the Enable and RWB back to 1
-    signals = TMS_SIG_RWB_SET | TMS_SIG_A1_SET |
-              TMS_SIG_MODE_RESET |
-              TMS_SIG_EN_SET; 
+    // Set Control signals
+    // EN - low
+    // RWB & A1 - low
+    // MODE - low : Selects Data word
+    set_signals(MODE_VRAM, RWB_WRITE);
 
-    io_out(TMS_SIG, signals);
+    mini_delay(1);
+
+    reset_signals();
 }
 
 // Read 8 bits from TMS VDP data port
 uint8_t tms_read_data()
 {
     uint8_t data = 0;
-    uint8_t signals = 0;
+    
+    setDataDir(DDIR_READ);
     
     // Set Control signals
-    
+    // EN - low
     // RWB & A1 - High
     // MODE - low : Selects Data word
-    // EN - low
+    set_signals(MODE_VRAM, RWB_READ);
 
-    signals = TMS_SIG_RWB_SET | TMS_SIG_A1_SET |
-              TMS_SIG_MODE_RESET |
-              TMS_SIG_EN_RESET; 
+    //mini_delay(30);
 
-    io_out(TMS_SIG, signals);
-
-    // Set Data to READ
-    io_out(TMS_DATA_DIR, TMS_DATA_READ);
-    //IO(TMS_DATA_DIR) = TMS_DATA_READ;
-    
-    // delay here?
-    
     data = io_in(TMS_DATA);
     //data = IO(TMS_DATA);
-
-    signals = TMS_SIG_RWB_SET | TMS_SIG_A1_SET |
-              TMS_SIG_MODE_RESET |
-              TMS_SIG_EN_SET; 
-
-    io_out(TMS_SIG, signals);
+    
+    reset_signals();
 
     return data;
 }
@@ -102,66 +126,41 @@ uint8_t tms_read_data()
 // Write a byte to the Control/Address word
 void tms_write_ctrl_addr(uint8_t data)
 {
-    // Set Control signals
-    uint8_t signals = 0;
-    
-    // RWB & A1 - low
-    // MODE - high : Selects Control/Address word
-    // EN - low
+    setDataDir(DDIR_WRITE);
 
-    signals = TMS_SIG_RWB_RESET | TMS_SIG_A1_RESET |
-              TMS_SIG_MODE_SET |
-              TMS_SIG_EN_RESET; 
-
-    io_out(TMS_SIG, signals);
-
-    // Set Data to WRITE
-    io_out(TMS_DATA_DIR, TMS_DATA_WRITE);
-    //IO(TMS_DATA_DIR) = TMS_DATA_WRITE;
     io_out(TMS_DATA, data);
     //IO(TMS_DATA) = data;
 
-    // Set the Enable and RWB back to 1
-    signals = TMS_SIG_RWB_SET | TMS_SIG_A1_SET |
-              TMS_SIG_MODE_RESET |
-              TMS_SIG_EN_SET; 
+    // Set Control signals
+    // EN - low
+    // RWB & A1 - low
+    // MODE - high : Selects Control/Address word
+    set_signals(MODE_REGADDR, RWB_WRITE);
 
-    io_out(TMS_SIG, signals);
+    mini_delay(3);
+
+    reset_signals();
+
+    mini_delay(3);
 }
 
 // Read from the VDP status register
 uint8_t tms_read_status()
 {
     uint8_t data = 0;
-    uint8_t signals = 0;
     
+    setDataDir(DDIR_READ);
+
     // Set Control signals
-    
     // RWB & A1 - High
     // MODE - high : Selects Ctrol/Status word
     // EN - low
+    set_signals(MODE_REGADDR, RWB_READ);
 
-    signals = TMS_SIG_RWB_SET | TMS_SIG_A1_SET |
-              TMS_SIG_MODE_SET |
-              TMS_SIG_EN_RESET; 
-
-    io_out(TMS_SIG, signals);
-
-    // Set Data to READ
-    io_out(TMS_DATA_DIR, TMS_DATA_READ);
-    //IO(TMS_DATA_DIR) = TMS_DATA_READ;
-    
-    // delay here?
-    
     data = io_in(TMS_DATA);
     //data = IO(TMS_DATA);
 
-    // Set the Enable and RWB back to 1
-    signals = TMS_SIG_RWB_SET | TMS_SIG_A1_SET |
-              TMS_SIG_MODE_RESET |
-              TMS_SIG_EN_SET; 
-
-    io_out(TMS_SIG, signals);
+    reset_signals();
 
     return data;
 }
@@ -193,8 +192,9 @@ uint8_t tms_read_status()
 // Write data to one of seven VDP registers
 void tms_write_vdp_register(uint8_t reg, uint8_t data)
 {
-    vdp_set_text_colour(7); printf("Write VDP Reg %d -> %02X\n", reg, data);
-    tms_write_data( data );
+    //vdp_set_text_colour(7);
+    printf("Write VDP Reg %d -> %02X\n", reg, data);
+    tms_write_ctrl_addr( data );
     tms_write_ctrl_addr( reg | 0x80 );
 }
 
@@ -202,27 +202,29 @@ void tms_write_vdp_register(uint8_t reg, uint8_t data)
 uint8_t tms_read_vdp_status()
 {
     uint8_t status = tms_read_status();
-    vdp_set_text_colour(7); printf("Read VDP Status %02X\n", status);
+    //vdp_set_text_colour(7);
+    printf("Read VDP Status %02X\n", status);
     return status;
 }
 
 // Set VDP address for reading or writing.
 // VDP Addresses are 14-bit (hi byte first)
 //  - Follow by a series of writes/reads to/from VRAM
-void tms_set_vdp_address(uint16_t vaddr)
+void tms_set_vdp_address(uint16_t vaddr, uint8_t read)
 {
-    vdp_set_text_colour(7); printf("Set VDP Addr %04X\n", vaddr);
+    //vdp_set_text_colour(7);
+    printf("Set VDP Addr %04X\n", vaddr);
     uint8_t lobyte=0, hibyte=0;
     lobyte = (vaddr & 0xFF);
-    hibyte = ((vaddr>>8) & 0x3F) | 0x40;
-    tms_write_data( lobyte );
-    tms_write_data( hibyte );
+    hibyte = ((vaddr>>8) & 0x3F) | read?0x00:0x40;
+    tms_write_ctrl_addr( lobyte );
+    tms_write_ctrl_addr( hibyte );
 }
 
 // Write a data block to the VDP
 void tms_vdp_write_data(uint16_t vaddr, uint16_t datalen, uint8_t *data)
 {
-    tms_set_vdp_address(vaddr);
+    tms_set_vdp_address(vaddr, WRITE);
     for(uint16_t i=0; i<datalen; i++)
     {
         tms_write_data(data[i]);
@@ -232,7 +234,7 @@ void tms_vdp_write_data(uint16_t vaddr, uint16_t datalen, uint8_t *data)
 // Read a block of data from the VDP
 void tms_vdp_read_data(uint16_t vaddr, uint16_t datalen, uint8_t* buffer)
 {
-    tms_set_vdp_address(vaddr);
+    tms_set_vdp_address(vaddr, READ);
     for(uint16_t i=0; i<datalen; i++)
     {
         buffer[i] = tms_read_data();
@@ -246,7 +248,8 @@ void tms_vdp_read_data(uint16_t vaddr, uint16_t datalen, uint8_t* buffer)
 // 3 = Multicolor mode
 void tms_vdp_set_mode(uint8_t mode)
 {
-    vdp_set_text_colour(7); printf("Set mode %d\n", mode);
+    //vdp_set_text_colour(7);
+    printf("Set mode %d\n", mode);
     uint16_t tbl_offset = mode << 3; // Offset into mode register table
 
     for (uint8_t i=0; i<8; i++)
@@ -258,39 +261,67 @@ void tms_vdp_set_mode(uint8_t mode)
 void tms_vdp_load_character_set()
 {
     // Load default character set
-    for (uint8_t c=0; c<128; c++)
-    {
-        tms_vdp_write_data( (VDPMode<<3) + VDP_ADDR_PATT_TABLE, 8, CHAR_TABLE[c]);
-    }
+    //for (uint8_t c=0; c<128; c++)
+    //{
+        //tms_vdp_write_data( (VDPMode<<3) + VDP_ADDR_PATT_TABLE, 8, CHAR_TABLE[c]);
+        //tms_vdp_write_data( 0x800, 8, CHAR_TABLE[c]);
+    //}
+
+    uint8_t *table = (uint8_t*) CHAR_TABLE[0];
+    tms_vdp_write_data( 0x000, 8*128, table);
+    tms_vdp_write_data( 0x400, 8*128, table);
 }
 
 void tms_vdp_clear_screen_m0( uint8_t clr_char )
 {
-    // Mode 0 is 40x24 - 520 characters
+    // Mode 0 is 40x24 - 960 characters
    
-    for (int i=0; i<520; i++)
+    for (int i=0; i<960; i++)
     {
         ScreenMode0[i] = clr_char;
     }
-    tms_vdp_write_data( VDP_ADDR_NAME_TABLE, 520, ScreenMode0 );
+    //tms_vdp_write_data( VDP_ADDR_NAME_TABLE, 520, ScreenMode0 );
+    tms_vdp_write_data( 0x800, 960, ScreenMode0 );
 }
 
-void tms_memory_test(void)
+void tms_memory_test(uint16_t addr, unsigned int count, bool reverse)
 {
-    int num_bytes = 16;
-    // Write to VDP address 0x00 and read back
+    // Write to VDP address 0x0040 and read back
 
-    vdp_set_text_colour(7); printf("Write %d bytes\n", num_bytes);
-    tms_set_vdp_address(0x00);
-    for (unsigned int i=0; i<num_bytes; i++)
+    //vdp_set_text_colour(7);
+    printf("Write %d bytes\n", count);
+    tms_set_vdp_address(addr, WRITE);
+    for (unsigned int i=0; i<count; i++)
     {
-        tms_write_data(i);
+        if (reverse) {
+            tms_write_data(255-(i%256));
+        } else {
+            tms_write_data(i%256);
+        }
     }
-    vdp_set_text_colour(7); printf("Read back\n");
-    tms_set_vdp_address(0x00);
-    for (unsigned int i=0; i < num_bytes; i++)
+    //vdp_set_text_colour(7);
+    printf("Read back\n");
+    //vdp_set_text_colour(6);
+    tms_set_vdp_address(addr, READ);
+    for (unsigned int i=0; i < count; i++)
     {
-        vdp_set_text_colour(6); printf("0x%02X ",tms_read_data());
+        printf("0x%02X ",tms_read_data());
     }
+    //vdp_set_text_colour(7);
+    printf("\n");
+}
+
+void read_vram(uint16_t addr, unsigned int count)
+{
+    //vdp_set_text_colour(7);
+    printf("Read %d bytes from addr 0x%04X\n",count, addr);
+    //vdp_set_text_colour(6);
+    tms_set_vdp_address(addr, READ);
+    for (unsigned int i=0; i < count; i++)
+    {
+        printf("0x%02X ",tms_read_data());
+    }
+    //vdp_set_text_colour(7);
+    printf("\n");
 
 }

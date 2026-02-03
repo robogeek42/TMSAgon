@@ -54,9 +54,9 @@
 //  4 00 : Patt Table 0000
 //  5 00 : Spr Attrib ----
 //  6 00 : Spr Patt   ----
-//  7 f0 : Black text on white
+//  7 f0 : Black text on white, 4F = white on Dark Blue
 
-#define VDP_SETUP_MODE0 0x00, 0xD0, 0x02, 0x00, 0x00, 0x00, 0x00, 0xF0
+#define VDP_SETUP_MODE0 0x00, 0xD0, 0x02, 0x00, 0x00, 0x00, 0x00, 0xF4
 
 // 
 // Mode 1/2: Graphics I - small/large sprites

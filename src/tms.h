@@ -7,6 +7,7 @@
 
 #include "agon/vdp.h"
 #include "agon/mos.h"
+#include "agon/timer.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -64,23 +65,19 @@
 
 // Mode - this selects between VRAM=0 and Registers=1
 // Pin 7 (count from 0)
-#define TMS_SIG_MODE_SET    0b10000000 
-#define TMS_SIG_MODE_RESET  0b01111111 
+#define TMS_SIG_MODE_BIT    7 
 
 // Chip enable for accessing card (read/write)
 // Pin 6
-#define TMS_SIG_EN_SET      0b01000000 
-#define TMS_SIG_EN_RESET    0b10111111 
+#define TMS_SIG_EN_BIT      6 
 
 // RWB - CPU Read/Write Signal. High = R, Low = W
 // Pin 5 
-#define TMS_SIG_RWB_SET     0b00100000 
-#define TMS_SIG_RWB_RESET   0b11011111 
+#define TMS_SIG_RWB_BIT     5 
 
 // A1 - Make same as RWB (board needs it set)
 // Pin 4 
-#define TMS_SIG_A1_SET     0b00100000 
-#define TMS_SIG_A1_RESET   0b11011111 
+#define TMS_SIG_A1_BIT      4 
 
 static uint8_t VDPModeTable[32] = { VDP_SETUP_MODE0,VDP_SETUP_MODE1,VDP_SETUP_MODE2,VDP_SETUP_MODE3 };
 
@@ -92,13 +89,14 @@ uint8_t tms_read_status();
 
 void tms_write_vdp_register(uint8_t reg, uint8_t data);
 uint8_t tms_read_vdp_status();
-void tms_set_vdp_address(uint16_t vaddr);
+void tms_set_vdp_address(uint16_t vaddr, uint8_t read);
 void tms_vdp_write_data(uint16_t vaddr, uint16_t datalen, uint8_t *data);
 void tms_vdp_read_data(uint16_t vaddr, uint16_t datalen, uint8_t* buffer);
 
 void tms_vdp_set_mode(uint8_t mode);
 void tms_vdp_load_character_set();
 void tms_vdp_clear_screen_m0( uint8_t clr_char );
-void tms_memory_test(void);
+void tms_memory_test(uint16_t addr, unsigned int count, bool reverse);
+void read_vram(uint16_t addr, unsigned int count);
 
 #endif
