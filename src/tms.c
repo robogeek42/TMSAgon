@@ -34,13 +34,11 @@ void set_signals(uint8_t MODE, uint8_t RWB)
                       (RWB==1?1<<TMS_SIG_A1_BIT:0) | 
                       (MODE==1?1<<TMS_SIG_MODE_BIT:0);
 
-    io_out(TMS_SIG, signals);
-    //IO(TMS_SIG) = signals;
+    IO(TMS_SIG) =  signals;
 }
 void reset_signals()
 {
-    io_out(TMS_SIG, 0x70);
-    //IO(TMS_SIG) = 0x70;
+    IO(TMS_SIG) = 0x70;
 } 
 
 #define DDIR_WRITE 0
@@ -50,8 +48,7 @@ void setDataDir(uint8_t ddir)
 {
     if (dataDir != ddir)
     {
-        io_out(TMS_DATA_DIR, ddir==DDIR_READ?TMS_DATA_READ:TMS_DATA_WRITE);
-        //IO(TMS_DATA_DIR) = ddir==DDIR_READ?TMS_DATA_READ:TMS_DATA_WRITE;
+        IO(TMS_DATA_DIR) = ddir==DDIR_READ?TMS_DATA_READ:TMS_DATA_WRITE;
         dataDir = ddir;
     }
 }
@@ -60,8 +57,7 @@ bool tms_init()
 {
     // No reset pin, unfortunately!
     // CONTROL : Pins 4,5,6,7 are always write
-    io_out(TMS_SIG_DIR, TMS_SIG_INIT);
-    //IO(TMS_SIG_DIR) = TMS_SIG_INIT;
+    IO(TMS_SIG_DIR) = TMS_SIG_INIT;
 
     // Read Status Reg to clear interrupt bit
     uint8_t status_reg = tms_read_status();
@@ -72,10 +68,10 @@ bool tms_init()
 
     // set registers for mode 0
     VDPMode = 0; // default
-    for (uint8_t i=0; i<8; i++)
-    {
-        tms_write_vdp_register( i, VDPModeTable[i] );
-    }
+    // for (uint8_t i=0; i<8; i++) {
+    //     tms_write_vdp_register( i, VDPModeTable[i] );
+    // }
+    load_mode(0);
 
     return true;
 }
@@ -86,8 +82,7 @@ void tms_write_data(uint8_t data)
 {
     setDataDir(DDIR_WRITE);
 
-    io_out(TMS_DATA, data);
-    //IO(TMS_DATA) = data;
+    IO(TMS_DATA) = data;
 
     // Set Control signals
     // EN - low
@@ -115,8 +110,7 @@ uint8_t tms_read_data()
 
     //mini_delay(30);
 
-    data = io_in(TMS_DATA);
-    //data = IO(TMS_DATA);
+    data = IO(TMS_DATA);
     
     reset_signals();
 
@@ -128,8 +122,7 @@ void tms_write_ctrl_addr(uint8_t data)
 {
     setDataDir(DDIR_WRITE);
 
-    io_out(TMS_DATA, data);
-    //IO(TMS_DATA) = data;
+    IO(TMS_DATA) = data;
 
     // Set Control signals
     // EN - low
@@ -157,8 +150,7 @@ uint8_t tms_read_status()
     // EN - low
     set_signals(MODE_REGADDR, RWB_READ);
 
-    data = io_in(TMS_DATA);
-    //data = IO(TMS_DATA);
+    data = IO(TMS_DATA);
 
     reset_signals();
 

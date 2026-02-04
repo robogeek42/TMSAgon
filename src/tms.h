@@ -16,7 +16,9 @@
 #include <stdint.h>
 #include <time.h>
 
-#include "gpio.h"
+#include <ez80f92.h>
+
+#include "tms_lowlevel.h"
 
 #include "video_chartable_1.h"
 #include "tms9918_mem_map.h"
